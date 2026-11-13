@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(orc-plugin-skeleton
-    VERSION 1.0.9
+    VERSION 1.0.10
     DESCRIPTION "Decode-Orc external plugin skeleton"
     LANGUAGES CXX
 )
@@ -28,35 +28,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BUILD_TESTS "Build skeleton plugin tests" ON)
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/DecodeOrcPluginSDKHelpers.cmake")
+
 if(DEFINED ORC_INTREE_SDK_DIR)
-    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/DecodeOrcPluginSDKHelpers.cmake")
-
-    # Since Decode-Orc 2.0 the SDK include surface is fully self-contained
-    # under orc/sdk/include (<orc/plugin/...> and <orc/stage/...>); private
-    # host include trees must not be exposed to plugin code.
-    add_library(orc-sdk-includes INTERFACE)
-
-    # Try to find fmt via CMake config (works with vcpkg toolchain on Windows).
-    # Fall back to a Nix store glob for Linux/macOS Nix dev shells.
-    find_package(fmt CONFIG QUIET)
-    if(fmt_FOUND)
-        target_link_libraries(orc-sdk-includes INTERFACE fmt::fmt-header-only)
-    else()
-        file(GLOB _orc_fmt_include_candidates "/nix/store/*-fmt-*/include")
-        list(LENGTH _orc_fmt_include_candidates _orc_fmt_include_count)
-        if(_orc_fmt_include_count GREATER 0)
-            list(GET _orc_fmt_include_candidates 0 _orc_fmt_include_dir)
-            target_include_directories(orc-sdk-includes INTERFACE ${_orc_fmt_include_dir})
-        endif()
-    endif()
-
-    add_library(orc-plugin-sdk INTERFACE)
-    target_include_directories(orc-plugin-sdk INTERFACE
-        ${ORC_INTREE_SDK_DIR}/orc/sdk/include
-    )
-    target_link_libraries(orc-plugin-sdk INTERFACE orc-sdk-includes)
+    # Build the SDK targets (headers + the orc-sdk-support static library)
+    # from a decode-orc checkout. No host library is built or linked.
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/DecodeOrcInTreeSDK.cmake")
 else()
-    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/DecodeOrcPluginSDKHelpers.cmake")
     find_package(decode-orc-plugin-sdk REQUIRED)
 endif()
 

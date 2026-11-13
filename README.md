@@ -16,7 +16,7 @@ This repository is intended to be the canonical starter template for third-party
 - Release workflow that uploads platform plugin artifacts together with the
   mandatory `orc-plugin-manifest.yaml`
 
-## SDK Contract (Decode-Orc 2.x — host ABI 13 / plugin API 4)
+## SDK Contract (Decode-Orc 2.x — host ABI 20 / plugin API 4)
 
 - Include only the public SDK umbrella header in plugin/stage code:
 
@@ -86,7 +86,7 @@ Execution and preview are connected by a small cache:
 - The same input is cached as a `VideoFrameRepresentation` (frame-based CVBS_U10_4FSC data, the Decode-Orc 2.x signal contract)
 - `get_preview_capability()` describes that cached representation to the host, which renders the preview itself
 
-Plugins built against the installed SDK package can simply return `PreviewHelpers::make_signal_preview_capability(cached_output_)`; this skeleton composes the capability by hand so it also builds in the header-only in-tree CI configuration, which links no host libraries. Stages that modify sample data should extend `VideoFrameRepresentationWrapper` instead of forwarding the input artifact unchanged — see the "Transform stages" section of the decode-orc plugin SDK guide (`docs/technical/plugin-sdk.md` in the decode-orc repository).
+Plugins built against the installed SDK package can simply return `PreviewHelpers::make_signal_preview_capability(cached_output_)`; this skeleton composes the capability by hand to show what the helper produces. Both configurations link the SDK's `orc-sdk-support` static library and no host library. Stages that modify sample data should extend `VideoFrameRepresentationWrapper` instead of forwarding the input artifact unchanged — see the "Transform stages" section of the decode-orc plugin SDK guide (`docs/technical/plugin-sdk.md` in the decode-orc repository).
 
 Since host ABI 11, such a wrapper should also override `video_passthrough_source(FrameID)` to return the wrapped source for any frame whose CVBS video content it leaves byte-identical (for example a correction pass over a frame with nothing to correct, or a stage that only appends an audio channel pair). The host uses that declaration to share frame-content-keyed stored observations with the upstream node instead of re-analysing identical samples. The answer must come from metadata alone — never decode samples to compare — and returning `nullptr`, the default, is always safe. This skeleton forwards the input pointer itself, so the host already sees a single representation and needs no declaration.
 
@@ -128,7 +128,7 @@ nix develop
 
 This repository's flake tracks the same nixpkgs release as decode-orc's flake, so the shell provides the same C++ toolchain as a decode-orc host built from its own `nix develop` / `nix build`. This matters: since Decode-Orc 2.0 (host ABI 5) the loader requires the plugin's toolchain tag (compiler family + major version + standard library, e.g. `gcc15/libstdc++`) to equal the host's exactly, and rejects the plugin otherwise. If you build the host from a different environment, build the plugin from that same environment.
 
-3. Configure and build:
+3. Configure and build. `-DORC_INTREE_SDK_DIR` points at a decode-orc checkout; `cmake/DecodeOrcInTreeSDK.cmake` then builds the SDK targets from it (the SDK headers plus the `orc-sdk-support` static library from `orc/sdk/src`), with no host library built or linked. Without it, CMake uses an installed SDK through `find_package(decode-orc-plugin-sdk)`.
 
 ```bash
 cmake -S . -B build \
@@ -154,9 +154,9 @@ ctest --test-dir build --output-on-failure
 Release assets and local packaging output follow
 `orc-plugin_<stage-name>_<platform>[_abi<N>].<ext>`:
 
-- `orc-plugin_skeleton_passthrough_linux_abi13.so`
-- `orc-plugin_skeleton_passthrough_macos_abi13.dylib`
-- `orc-plugin_skeleton_passthrough_windows_abi13.dll`
+- `orc-plugin_skeleton_passthrough_linux_abi20.so`
+- `orc-plugin_skeleton_passthrough_macos_abi20.dylib`
+- `orc-plugin_skeleton_passthrough_windows_abi20.dll`
 
 The `_abi<N>` token records the host ABI the binary targets, so one release can
 carry builds for several host ABIs side by side. The host validates downloads
@@ -175,11 +175,11 @@ or toolchain tag cannot work.
 ```yaml
 manifest_schema: 1
 plugin_id: org.decodeorc.stage.skeleton_passthrough
-plugin_version: 1.0.9
+plugin_version: 1.0.10
 artifacts:
-  - file: orc-plugin_skeleton_passthrough_linux_abi13.so
+  - file: orc-plugin_skeleton_passthrough_linux_abi20.so
     platform: linux
-    abi: 13
+    abi: 20
     toolchain_tag: gcc15/libstdc++
     sha256: 5854e982866bf2d3c8211c9f34af3d5686a66036953aaf026bef33b0d5a80b7b
 ```
@@ -209,7 +209,7 @@ the digest used to verify (and quarantine) downloads and cache hits.
 	- on push/PR: builds/tests/packages on Linux and macOS via Nix (`nix develop`), plus native Windows build; uploads CI artifacts
 	- on tag push (`v*`): runs the exact same build/test/package matrix, merges the per-platform manifest fragments, then publishes the artifacts and `orc-plugin-manifest.yaml` to GitHub Release assets
 - `ORC_SDK_REF` in the workflow selects the decode-orc checkout the SDK comes
-	from. It tracks `main` (host ABI 13); pin it to a branch or tag only for a
+	from. It tracks `main` (host ABI 20); pin it to a branch or tag only for a
 	deliberate, temporary reason, and return it to `main` once that branch
 	merges.
 

@@ -56,7 +56,7 @@ Use these instructions for all changes in this repository.
 
 ## CMake and Build Rules
 - Build plugin targets through the SDK helper/SDK target only.
-- For in-tree SDK use, treat decode-orc as a header/API source only; do not depend on internal compiled host libraries.
+- For in-tree SDK use, `cmake/DecodeOrcInTreeSDK.cmake` builds the SDK targets (headers plus the `orc-sdk-support` static library) from the decode-orc checkout; do not depend on internal compiled host libraries.
 - For installed SDK use, rely on `find_package(decode-orc-plugin-sdk REQUIRED)`.
 - Never add direct linkage to internal decode-orc targets just to satisfy convenience helpers.
 
@@ -64,7 +64,7 @@ Use these instructions for all changes in this repository.
 - Keep workflow SDK checkout pointed at decode-orc main by default.
 - Do not pin `ORC_SDK_REF` to ephemeral or unknown refs.
 - If pinning is required, use an existing branch/tag/commit and update references in the workflow intentionally.
-- `ORC_SDK_REF` currently tracks `main` (host ABI 13). Pin it only for a
+- `ORC_SDK_REF` currently tracks `main` (host ABI 20). Pin it only for a
   deliberate, temporary reason, and return it to `main` once that branch
   merges.
 - Preserve cross-platform matrix behavior (Linux/macOS/Windows) and packaging outputs.
