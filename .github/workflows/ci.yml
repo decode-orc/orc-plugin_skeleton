@@ -127,11 +127,16 @@ jobs:
         shell: bash
         run: |
           args="$ORC_CMAKE_ARGS ${{ matrix.view_cmake_args }}"
-          # Point CMake at the baseline Qt rather than the devshell's newer one.
+          # Point CMake at the baseline Qt rather than the devshell's newer
+          # one. Qt6_DIR alone is not enough: Qt's config finds its tool
+          # packages through the prefix path, where the devshell's Qt would
+          # otherwise come first and mix two Qt versions.
           if [ -n "${QT_ROOT_DIR:-}" ]; then
-            args="$args -DQt6_DIR=$QT_ROOT_DIR/lib/cmake/Qt6"
+            args="$args -DQt6_DIR=$QT_ROOT_DIR/lib/cmake/Qt6 -DCMAKE_PREFIX_PATH=$QT_ROOT_DIR"
           fi
-          nix develop --accept-flake-config --command cmake -S . -B build $args
+          nix develop --accept-flake-config --command bash -c \
+            'export CMAKE_PREFIX_PATH="${QT_ROOT_DIR:+$QT_ROOT_DIR:}${CMAKE_PREFIX_PATH:-}"; cmake -S . -B build "$@"' \
+            configure $args
 
       - name: Install fmt and spdlog (Windows)
         if: runner.os == 'Windows'
