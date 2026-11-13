@@ -171,7 +171,15 @@ jobs:
         shell: bash
         run: |
           chmod +x scripts/package_local.sh
-          ./scripts/package_local.sh ${{ matrix.build_dir }} dist
+          if [ "${{ matrix.use_kde_sdk }}" = "true" ]; then
+            # orc-plugin-build-info was built against the SDK's glibc (2.40),
+            # newer than the runner's, so package inside the SDK as well.
+            mkdir -p dist
+            flatpak run --filesystem="$PWD" --command=bash org.kde.Sdk//6.9 \
+              "$PWD/scripts/package_local.sh" "$PWD/${{ matrix.build_dir }}" "$PWD/dist"
+          else
+            ./scripts/package_local.sh ${{ matrix.build_dir }} dist
+          fi
 
       # The real merge only runs on tag builds, so exercise the script on every
       # platform here: a fragment-format or portability regression then fails
