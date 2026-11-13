@@ -113,4 +113,41 @@ StagePreviewCapability SkeletonPassthroughStage::get_preview_capability() const
     return capability;
 }
 
+std::vector<StageToolDescriptor> SkeletonPassthroughStage::get_stage_tools() const
+{
+    StageToolDescriptor inspector;
+    inspector.tool_id = "skeleton_inspector";
+    inspector.display_name = "Skeleton Inspector";
+    inspector.description = "Shows what the passthrough last forwarded, in the plugin's own window";
+    inspector.kind = StageToolKind::PluginView;
+    inspector.non_modal = true;
+    inspector.contract_id = kInspectorContractId;
+    return {inspector};
+}
+
+StageToolReply SkeletonPassthroughStage::handle_tool_request(
+    const std::string& contract_id, const std::string& verb,
+    const std::vector<uint8_t>&)
+{
+    StageToolReply reply;
+    if (contract_id != kInspectorContractId || verb != kInspectorSummaryVerb) {
+        reply.error = "Unknown request '" + verb + "' for " + contract_id;
+        return reply;
+    }
+
+    std::string text;
+    if (!cached_output_) {
+        text = "Nothing forwarded yet. Preview the node, or a node after it, "
+               "so the stage runs.";
+    } else {
+        const FrameIDRange range = cached_output_->frame_range();
+        text = "Forwarding " + std::to_string(cached_output_->frame_count()) +
+               " frames (" + std::to_string(range.first) + " to " +
+               std::to_string(range.last) + ").";
+    }
+    reply.data.assign(text.begin(), text.end());
+    reply.ok = true;
+    return reply;
+}
+
 } // namespace orc::plugins::skeleton

@@ -23,7 +23,7 @@ run_search() {
 }
 
 # Restrict scanning to source/build files where violations matter.
-include_scan_paths=(src tests tools)
+include_scan_paths=(src tests tools view)
 link_scan_paths=(CMakeLists.txt tests cmake)
 
 say "[sdk-boundary] Scanning for private decode-orc include usage..."

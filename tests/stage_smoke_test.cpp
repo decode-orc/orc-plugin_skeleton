@@ -36,5 +36,31 @@ int main()
         return 1;
     }
 
+    // The Inspector tool is a plugin view, served by this plugin's view
+    // binary under the contract id the stage answers on.
+    const auto tools = stage.get_stage_tools();
+    if (tools.size() != 1 || tools[0].kind != orc::StageToolKind::PluginView ||
+        tools[0].contract_id != orc::plugins::skeleton::kInspectorContractId) {
+        std::cerr << "Expected one PluginView tool on the Inspector contract\n";
+        return 1;
+    }
+
+    // Before execute() the stage still answers, saying there is nothing yet.
+    const auto summary = stage.handle_tool_request(
+        orc::plugins::skeleton::kInspectorContractId,
+        orc::plugins::skeleton::kInspectorSummaryVerb, {});
+    if (!summary.ok || summary.data.empty()) {
+        std::cerr << "Expected a summary before execute(): " << summary.error << '\n';
+        return 1;
+    }
+
+    // A verb it does not know is refused with a reason, never ignored.
+    const auto unknown = stage.handle_tool_request(
+        orc::plugins::skeleton::kInspectorContractId, "no-such-verb", {});
+    if (unknown.ok || unknown.error.empty()) {
+        std::cerr << "Expected an unknown verb to be refused with a reason\n";
+        return 1;
+    }
+
     return 0;
 }

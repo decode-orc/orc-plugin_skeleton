@@ -11,6 +11,8 @@ This repository is intended to be the canonical starter template for third-party
 	- `orc_get_stage_plugin_descriptor`
 	- `orc_register_stage_plugin`
 - Example stage help text (`instructions.md`) wired into the host help dialog
+- An optional view binary (`view/`, `orc-view_skeleton`): the Skeleton
+  Inspector window, opened from the stage's Stage Tools menu in `orc-gui`
 - Local smoke tests for stage metadata and entrypoint registration
 - Cross-platform CI workflow targets for Linux, macOS, and Windows
 - Release workflow that uploads platform plugin artifacts together with the
@@ -99,6 +101,42 @@ Decode-Orc shows per-stage documentation through `DAGStage::get_instructions()`,
 - `orc_add_stage_plugin()` detects `instructions.md` in the plugin source directory automatically, copies it to `lib<plugin>.md` beside the built library, and installs it with the plugin. Editing the file triggers a re-copy without rebuilding the stage.
 
 To document your own stage, keep the macro in the class and edit `instructions.md`. For plugins that cannot ship a sidecar file, the SDK also offers the legacy `ORC_STAGE_INSTRUCTIONS(<string>)` macro to embed the Markdown inline.
+
+## View Hook
+
+A stage binary has no Qt, so a plugin that needs its own window ships a
+second binary, the **view binary**. The skeleton's is the Skeleton
+Inspector: a dialog that asks the stage what it last forwarded.
+
+- The stage advertises the tool through `StageToolProvider`, with kind
+  `StageToolKind::PluginView` and the contract id
+  `org.decodeorc.skeleton.inspector.v1`.
+- The stage answers the view in `IStageToolRequestHandler::handle_tool_request()`
+  (`<orc/stage/tooling/stage_tool_requests.h>`). The host calls it on its
+  render worker and passes the verb and bytes through untouched.
+- `view/skeleton_view.cpp` is the view binary. It registers a factory for
+  the same contract id with `ORC_DEFINE_VIEW_PLUGIN`, and talks to the stage
+  only through the `orc::view::IStageToolSession` it is opened with.
+- The view links Qt 6 Core, Gui and Widgets, and nothing else from Qt. Its
+  file must be named `orc-view_...` with no `lib` prefix. `orc-cli` never
+  loads it.
+- Build it against decode-orc's view Qt baseline (Qt 6.9 today): `orc-gui`
+  refuses a view built for a newer Qt minor than its own. The macOS and
+  Windows CI lanes install Qt 6.9 for the view.
+- Linux binaries, the stage as well as the view, are built inside
+  `org.kde.Sdk//6.9` by `scripts/build_in_kde_sdk.sh <decode-orc-checkout>`.
+  That is the SDK the Flatpak `orc-gui` is built with (GCC 14, Qt 6.9). A
+  Nix build carries GCC 15's toolchain tag, which the Flatpak refuses. The
+  Nix devshell stays for local development against a Nix-built `orc-gui`.
+
+The view is built when CMake finds Qt 6 Widgets; `-DBUILD_VIEW=OFF` leaves it
+out. `scripts/package_local.sh` packages it as
+`orc-view_<stage>_<platform>_view<N>.<ext>` and adds a `kind: view` entry to
+the manifest fragment (`manifest_schema: 2`), after the stage entry.
+
+To try it, point `ORC_STAGE_PLUGIN_PATHS` at the folder holding both
+binaries, start `orc-gui`, add a Skeleton Passthrough node after a source,
+preview it, then open **Stage Tools > Skeleton Inspector** on the node.
 
 ## Local Build (installed SDK)
 

@@ -36,6 +36,8 @@
             # Third-party headers permitted by the plugin SDK allowlist.
             fmt
             spdlog
+            # The view binary links Qt 6 Widgets.
+            qt6.qtbase
 
             # Link-interface dependencies of orc::orc-core. The SDK's CMake
             # config (decode-orc-plugin-sdkConfig.cmake) resolves these with

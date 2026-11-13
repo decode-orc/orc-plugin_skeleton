@@ -9,6 +9,8 @@
 #pragma once
 
 #include <orc/abi/orc_plugin_sdk.h>
+#include <orc/plugin/orc_stage_tooling.h>
+#include <orc/stage/tooling/stage_tool_requests.h>
 
 #include <cstddef>
 #include <map>
@@ -17,6 +19,15 @@
 #include <vector>
 
 namespace orc::plugins::skeleton {
+
+// The Inspector tool: a window drawn by this plugin's view binary
+// (view/skeleton_view.cpp), opened from the stage's Stage Tools menu in
+// orc-gui. The view and the stage agree on the contract id and on the verbs
+// and bytes they exchange; the host passes them through untouched.
+inline constexpr const char* kInspectorContractId =
+    "org.decodeorc.skeleton.inspector.v1";
+// The one verb: the reply is UTF-8 text describing what the stage last saw.
+inline constexpr const char* kInspectorSummaryVerb = "summary";
 
 // Minimal passthrough transform for the Decode-Orc 2.x plugin SDK
 // (host ABI 20 / plugin API 4). Demonstrates the two contracts every
@@ -28,7 +39,13 @@ namespace orc::plugins::skeleton {
 //   the legacy PreviewableStage interface in Decode-Orc 2.0. The stage only
 //   declares what data it can supply (data types, navigable range, active
 //   picture geometry); all image rendering is performed by the host.
-class SkeletonPassthroughStage : public DAGStage, public IStagePreviewCapability {
+//
+// It also shows a plugin view: StageToolProvider advertises the Inspector
+// tool, and IStageToolRequestHandler answers the view's requests.
+class SkeletonPassthroughStage : public DAGStage,
+                                 public IStagePreviewCapability,
+                                 public StageToolProvider,
+                                 public IStageToolRequestHandler {
 public:
     std::string version() const override;
     NodeTypeInfo get_node_type_info() const override;
@@ -49,6 +66,16 @@ public:
     // IStagePreviewCapability. Returns an is_valid() == false capability
     // until execute() has cached a frame representation.
     StagePreviewCapability get_preview_capability() const override;
+
+    // StageToolProvider: the Inspector tool (StageToolKind::PluginView).
+    std::vector<StageToolDescriptor> get_stage_tools() const override;
+
+    // IStageToolRequestHandler: called on the host's render worker with the
+    // view's requests. Answers from what execute() last cached; never runs
+    // anything itself.
+    StageToolReply handle_tool_request(const std::string& contract_id,
+                                       const std::string& verb,
+                                       const std::vector<uint8_t>& payload) override;
 
 private:
     mutable std::shared_ptr<const VideoFrameRepresentation> cached_output_;

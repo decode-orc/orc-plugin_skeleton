@@ -18,24 +18,41 @@ jobs:
       # Host SDK the plugin is built against. Tracks `main` (host ABI 20).
       # Pin to a branch or tag only for a deliberate, temporary reason, and
       # restore `main` once it merges.
-      ORC_SDK_REF: main
+      # Temporarily issue-377: the view SDK tier (orc/view/) is not on main
+      # yet. Restore `main` once decode-orc issue-377 merges.
+      ORC_SDK_REF: issue-377
       ORC_CMAKE_ARGS: -DORC_INTREE_SDK_DIR=${{ github.workspace }}/decode-orc -DBUILD_TESTS=ON
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Every binary must carry the release orc-gui's toolchain tag, and
+          # the view must be built against the view Qt baseline (see
+          # decode-orc's plugin-sdk.md). Linux therefore builds inside
+          # org.kde.Sdk//6.9, the SDK decode-orc's Flatpak is built with
+          # (GCC 14, Qt 6.9): a Nix build (GCC 15) would not load there.
           - os: ubuntu-latest
             platform: linux
             ext: so
-            use_nix: true
+            use_nix: false
+            use_kde_sdk: true
+            build_dir: build-kde-sdk/plugin
           - os: macos-latest
             platform: macos
             ext: dylib
             use_nix: true
+            qt_host: mac
+            qt_arch: clang_64
+            view_cmake_args: ""
+            build_dir: build
           - os: windows-latest
             platform: windows
             ext: dll
             use_nix: false
+            qt_host: windows
+            qt_arch: win64_msvc2022_64
+            view_cmake_args: ""
+            build_dir: build
 
     steps:
       - name: Checkout skeleton plugin
@@ -79,30 +96,63 @@ jobs:
           chmod +x scripts/check_sdk_boundary.sh
           ./scripts/check_sdk_boundary.sh .
 
+      - name: Install the Flatpak KDE SDK (Linux)
+        if: matrix.use_kde_sdk
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y flathub org.kde.Platform//6.9 org.kde.Sdk//6.9
+
+      # Configure, build and test in one go, inside the SDK.
+      - name: Build and test (KDE SDK)
+        if: matrix.use_kde_sdk
+        run: |
+          chmod +x scripts/build_in_kde_sdk.sh
+          ./scripts/build_in_kde_sdk.sh "$ORC_SDK_DIR" build-kde-sdk
+
+      # The view links Qt Widgets, built against the view Qt baseline (6.9):
+      # orc-gui refuses a view built for a newer Qt minor than its own.
+      - name: Install Qt (view baseline)
+        if: matrix.qt_host
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.9.*'
+          host: ${{ matrix.qt_host }}
+          target: 'desktop'
+          arch: ${{ matrix.qt_arch }}
+
       - name: Configure (Nix)
         if: matrix.use_nix
+        shell: bash
         run: |
-          nix develop --accept-flake-config --command \
-            cmake -S . -B build $ORC_CMAKE_ARGS
+          args="$ORC_CMAKE_ARGS ${{ matrix.view_cmake_args }}"
+          # Point CMake at the baseline Qt rather than the devshell's newer one.
+          if [ -n "${QT_ROOT_DIR:-}" ]; then
+            args="$args -DQt6_DIR=$QT_ROOT_DIR/lib/cmake/Qt6"
+          fi
+          nix develop --accept-flake-config --command cmake -S . -B build $args
 
       - name: Install fmt and spdlog (Windows)
         if: runner.os == 'Windows'
         run: vcpkg install fmt:x64-windows spdlog:x64-windows
 
+
       - name: Configure (native)
-        if: ${{ !matrix.use_nix }}
+        if: ${{ !matrix.use_nix && !matrix.use_kde_sdk }}
         run: >
           cmake -S . -B build
           -DORC_INTREE_SDK_DIR=${{ env.ORC_SDK_DIR }}
           -DBUILD_TESTS=ON
           -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+          -DQt6_DIR=${{ env.QT_ROOT_DIR }}/lib/cmake/Qt6
 
       - name: Build (Nix)
         if: matrix.use_nix
         run: nix develop --accept-flake-config --command cmake --build build --config Release --parallel
 
       - name: Build (native)
-        if: ${{ !matrix.use_nix }}
+        if: ${{ !matrix.use_nix && !matrix.use_kde_sdk }}
         run: cmake --build build --config Release --parallel
 
       - name: Test (Nix)
@@ -110,7 +160,7 @@ jobs:
         run: nix develop --accept-flake-config --command ctest --test-dir build --output-on-failure -C Release
 
       - name: Test (native)
-        if: ${{ !matrix.use_nix }}
+        if: ${{ !matrix.use_nix && !matrix.use_kde_sdk }}
         run: ctest --test-dir build --output-on-failure -C Release
 
       # Names the asset orc-plugin_skeleton_passthrough_<platform>_abi<N>.<ext>
@@ -121,7 +171,7 @@ jobs:
         shell: bash
         run: |
           chmod +x scripts/package_local.sh
-          ./scripts/package_local.sh build dist
+          ./scripts/package_local.sh ${{ matrix.build_dir }} dist
 
       # The real merge only runs on tag builds, so exercise the script on every
       # platform here: a fragment-format or portability regression then fails
@@ -167,4 +217,5 @@ jobs:
         with:
           files: |
             artifacts/**/orc-plugin_skeleton_passthrough_*
+            artifacts/**/orc-view_skeleton_passthrough_*
             orc-plugin-manifest.yaml
