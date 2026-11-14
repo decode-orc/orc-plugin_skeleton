@@ -1,23 +1,32 @@
 {
   description = "Decode-Orc skeleton stage plugin";
 
-  # Keep the nixpkgs input aligned with the decode-orc host repository's
-  # flake (github:decode-orc/decode-orc). Since Decode-Orc 2.0 (host ABI 5+)
-  # the plugin loader requires the plugin's toolchain tag — compiler family,
-  # major version, and C++ standard library — to equal the host's exactly.
-  # Building from a different nixpkgs generation (and therefore a different
-  # default gcc) produces plugins the host refuses to load.
+  # Keep both nixpkgs inputs on the same releases as the decode-orc flake
+  # (github:decode-orc/decode-orc). The host loads a plugin only when the
+  # plugin's toolchain tag (compiler family, major version and C++ standard
+  # library) equals its own, and a different nixpkgs release brings a
+  # different default compiler. On Linux the decode-orc flake builds from
+  # nixos-25.05, whose GCC 14 and Qt 6.9 match the released Flatpak
+  # (org.kde.Sdk//6.9), so a plugin built here also loads in the Flatpak.
+  # macOS and the source tools (clang-format, clang-tidy) come from 26.05.
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+    nixpkgs-linux.url = "github:NixOS/nixpkgs/nixos-25.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, nixpkgs-linux, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs {
-          inherit system;
-        };
+        # Source tools: 26.05 on every platform.
+        toolPkgs = import nixpkgs { inherit system; };
+
+        # Everything compiled or linked: 25.05 on Linux (the Flatpak's
+        # toolchain), 26.05 on macOS.
+        pkgs =
+          if nixpkgs.lib.hasSuffix "-linux" system
+          then import nixpkgs-linux { inherit system; }
+          else toolPkgs;
 
         # Use the nixpkgs default stdenv, exactly as the decode-orc flake
         # does: gcc + libstdc++ on Linux, clang + libc++ on macOS. Do not
@@ -51,7 +60,7 @@
 
             # Development tools (mirrors the decode-orc dev shell subset
             # relevant to plugin work).
-            clang-tools
+            toolPkgs.clang-tools
             ccache
             git
           ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
