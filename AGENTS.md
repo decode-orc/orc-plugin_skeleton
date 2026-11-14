@@ -64,9 +64,10 @@ Use these instructions for all changes in this repository.
 - Keep workflow SDK checkout pointed at decode-orc main by default.
 - Do not pin `ORC_SDK_REF` to ephemeral or unknown refs.
 - If pinning is required, use an existing branch/tag/commit and update references in the workflow intentionally.
-- `ORC_SDK_REF` currently tracks `main` (host ABI 21). Pin it only for a
+- `ORC_SDK_REF` normally tracks `main` (host ABI 21). Pin it only for a
   deliberate, temporary reason, and return it to `main` once that branch
-  merges.
+  merges. It is pinned to `issue-382` until decode-orc issue-382 merges (the
+  view session's job and parameter calls are only there).
 - Preserve cross-platform matrix behavior (Linux/macOS/Windows) and packaging outputs.
 - Preserve artifact names and expected output paths unless a coordinated CI change is made.
 - Release assets and the release manifest are published together; a change to

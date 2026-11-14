@@ -23,7 +23,21 @@ geometry.
 
 ## Parameters
 
-This stage has no parameters.
+- **Note** (`note`, text, default empty): free text kept with the node. The
+  stage does nothing with it. The Skeleton Inspector's **Keep as Note**
+  writes its last measurement here.
+
+## Skeleton Inspector
+
+**Stage Tools > Skeleton Inspector** opens the plugin's own window (in
+orc-gui, when the plugin's view binary is installed beside the stage):
+
+- The summary says how many frames the stage last forwarded, and the note.
+  **Refresh** asks again.
+- **Measure** counts the dropouts the input reports over every frame, with
+  a progress bar; **Cancel** stops it. Previews carry on while it runs.
+- **Keep as Note** writes the measurement to the **Note** parameter, the
+  same edit as making it in the parameter editor.
 
 ## About this help page
 

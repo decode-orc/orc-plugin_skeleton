@@ -106,14 +106,32 @@ To document your own stage, keep the macro in the class and edit `instructions.m
 
 A stage binary has no Qt, so a plugin that needs its own window ships a
 second binary, the **view binary**. The skeleton's is the Skeleton
-Inspector: a dialog that asks the stage what it last forwarded.
+Inspector: a dialog that asks the stage what it last forwarded, runs a
+measurement in the stage with progress and Cancel, and can keep the result
+in the node's `note` parameter.
 
 - The stage advertises the tool through `StageToolProvider`, with kind
   `StageToolKind::PluginView` and the contract id
   `org.decodeorc.skeleton.inspector.v1`.
 - The stage answers the view in `IStageToolRequestHandler::handle_tool_request()`
   (`<orc/stage/tooling/stage_tool_requests.h>`). The host calls it on its
-  render worker and passes the verb and bytes through untouched.
+  render worker and passes the verb and bytes through untouched. Keep
+  requests quick: previews wait behind them.
+- Work long enough to need progress and Cancel is a job. The view starts it
+  with `IStageToolSession::run_job()`, and the stage runs it in
+  `IStageToolJobHandler::run_tool_job()`
+  (`<orc/stage/tooling/stage_tool_jobs.h>`) on a job worker, reading the
+  node's inputs from the `IToolJobContext` it is given, reporting progress
+  and checking `is_cancelled()` once per frame. The host runs it on a stage
+  object built for the job, so it never sees what `execute()` cached. The
+  skeleton's `measure` job counts the dropouts the input reports.
+- A job only computes. To change the node, the view writes parameters with
+  `IStageToolSession::apply_parameters()`, as the parameter editor would;
+  the stage declares them through `ParameterizedStage`. The Inspector's
+  **Keep as Note** writes the measurement to `note`. The write rebuilds the
+  graph, which closes a view unless it has set a handler with
+  `set_graph_rebuilt_handler()`; the Inspector sets one and asks the new
+  stage object again.
 - `view/skeleton_view.cpp` is the view binary. It registers a factory for
   the same contract id with `ORC_DEFINE_VIEW_PLUGIN`, and talks to the stage
   only through the `orc::view::IStageToolSession` it is opened with.
@@ -137,6 +155,14 @@ the manifest fragment (`manifest_schema: 2`), after the stage entry.
 To try it, point `ORC_STAGE_PLUGIN_PATHS` at the folder holding both
 binaries, start `orc-gui`, add a Skeleton Passthrough node after a source,
 preview it, then open **Stage Tools > Skeleton Inspector** on the node.
+Press **Measure**, then **Keep as Note**, and the note appears in the
+Inspector's summary and in the node's parameters.
+
+A view can also link `orc::view-support`, the widgets `orc-gui` ships for
+views (plots, a frame viewport, the analysis tool window); see "Shared
+widgets" in the decode-orc plugin SDK guide. The skeleton's view needs none
+of them, and the in-tree SDK build (`cmake/DecodeOrcInTreeSDK.cmake`) does
+not define that target.
 
 ## Local Build (installed SDK)
 
@@ -249,7 +275,8 @@ the digest used to verify (and quarantine) downloads and cache hits.
 - `ORC_SDK_REF` in the workflow selects the decode-orc checkout the SDK comes
 	from. It tracks `main` (host ABI 21); pin it to a branch or tag only for a
 	deliberate, temporary reason, and return it to `main` once that branch
-	merges.
+	merges. It is pinned to `issue-382` for now: the job and parameter
+	write-back calls the Inspector uses are only there.
 
 ## Tagging a Release
 

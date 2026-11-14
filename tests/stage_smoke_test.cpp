@@ -1,6 +1,23 @@
 #include "skeleton_passthrough_stage.h"
 
 #include <iostream>
+#include <string>
+#include <vector>
+
+namespace {
+
+// What the host hands a job: here, no inputs at all.
+class EmptyJobContext final : public orc::IToolJobContext {
+public:
+    const std::vector<orc::ArtifactPtr>& inputs() const override { return inputs_; }
+    void report_progress(double, const std::string&) override {}
+    bool is_cancelled() const override { return false; }
+
+private:
+    std::vector<orc::ArtifactPtr> inputs_;
+};
+
+} // namespace
 
 int main()
 {
@@ -59,6 +76,46 @@ int main()
         orc::plugins::skeleton::kInspectorContractId, "no-such-verb", {});
     if (unknown.ok || unknown.error.empty()) {
         std::cerr << "Expected an unknown verb to be refused with a reason\n";
+        return 1;
+    }
+
+    // The note parameter: declared, stored, and anything else refused
+    // without changing what is stored.
+    const auto descriptors = stage.get_parameter_descriptors();
+    if (descriptors.size() != 1 || descriptors[0].name != orc::plugins::skeleton::kNoteParameter ||
+        descriptors[0].type != orc::ParameterType::STRING) {
+        std::cerr << "Expected one STRING parameter named note\n";
+        return 1;
+    }
+    if (!stage.set_parameters({{orc::plugins::skeleton::kNoteParameter, std::string("kept")}})) {
+        std::cerr << "Expected the note to be accepted\n";
+        return 1;
+    }
+    if (stage.set_parameters({{orc::plugins::skeleton::kNoteParameter, std::string("other")},
+                              {"no_such_parameter", std::string("x")}})) {
+        std::cerr << "Expected an unknown parameter to be refused\n";
+        return 1;
+    }
+    const auto stored = stage.get_parameters();
+    if (std::get<std::string>(stored.at(orc::plugins::skeleton::kNoteParameter)) != "kept") {
+        std::cerr << "A refused set_parameters() must leave the note alone\n";
+        return 1;
+    }
+
+    // The measure job refuses, with a reason, a node with nothing to read,
+    // and a verb it does not know.
+    EmptyJobContext context;
+    const auto measured = stage.run_tool_job(orc::plugins::skeleton::kInspectorContractId,
+                                             orc::plugins::skeleton::kInspectorMeasureVerb, {},
+                                             context);
+    if (measured.ok || measured.error.empty()) {
+        std::cerr << "Expected the job to refuse a node without frames\n";
+        return 1;
+    }
+    const auto unknown_job = stage.run_tool_job(orc::plugins::skeleton::kInspectorContractId,
+                                                "no-such-job", {}, context);
+    if (unknown_job.ok || unknown_job.error.empty()) {
+        std::cerr << "Expected an unknown job to be refused with a reason\n";
         return 1;
     }
 

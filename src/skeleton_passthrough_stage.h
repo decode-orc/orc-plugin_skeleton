@@ -10,6 +10,7 @@
 
 #include <orc/abi/orc_plugin_sdk.h>
 #include <orc/plugin/orc_stage_tooling.h>
+#include <orc/stage/tooling/stage_tool_jobs.h>
 #include <orc/stage/tooling/stage_tool_requests.h>
 
 #include <cstddef>
@@ -26,11 +27,20 @@ namespace orc::plugins::skeleton {
 // and bytes they exchange; the host passes them through untouched.
 inline constexpr const char* kInspectorContractId =
     "org.decodeorc.skeleton.inspector.v1";
-// The one verb: the reply is UTF-8 text describing what the stage last saw.
+// A request: the reply is UTF-8 text describing what the stage last saw.
 inline constexpr const char* kInspectorSummaryVerb = "summary";
+// A job (run with progress and Cancel on a job worker): counts the dropouts
+// the input reports over every frame. The reply is UTF-8 text, which the
+// Inspector offers to keep in the node's `note` parameter.
+inline constexpr const char* kInspectorMeasureVerb = "measure";
+
+// The stage's one parameter: free text kept with the node. The stage does
+// nothing with it; the Inspector writes it with apply_parameters(), to show
+// how a view changes its node.
+inline constexpr const char* kNoteParameter = "note";
 
 // Minimal passthrough transform for the Decode-Orc 2.x plugin SDK
-// (host ABI 20 / plugin API 4). Demonstrates the two contracts every
+// (host ABI 21 / plugin API 4). Demonstrates the two contracts every
 // preview-capable transform implements:
 //
 // - DAGStage::execute() over frame-based artifacts: inputs carrying video
@@ -41,11 +51,15 @@ inline constexpr const char* kInspectorSummaryVerb = "summary";
 //   picture geometry); all image rendering is performed by the host.
 //
 // It also shows a plugin view: StageToolProvider advertises the Inspector
-// tool, and IStageToolRequestHandler answers the view's requests.
+// tool, IStageToolRequestHandler answers the view's quick requests,
+// IStageToolJobHandler runs its long job, and ParameterizedStage declares the
+// parameter the view writes back.
 class SkeletonPassthroughStage : public DAGStage,
+                                 public ParameterizedStage,
                                  public IStagePreviewCapability,
                                  public StageToolProvider,
-                                 public IStageToolRequestHandler {
+                                 public IStageToolRequestHandler,
+                                 public IStageToolJobHandler {
 public:
     std::string version() const override;
     NodeTypeInfo get_node_type_info() const override;
@@ -63,6 +77,13 @@ public:
     size_t required_input_count() const override;
     size_t output_count() const override;
 
+    // ParameterizedStage: the `note` parameter.
+    using ParameterizedStage::get_parameter_descriptors;
+    std::vector<ParameterDescriptor> get_parameter_descriptors(
+        VideoSystem project_format, SourceType source_type) const override;
+    std::map<std::string, ParameterValue> get_parameters() const override;
+    bool set_parameters(const std::map<std::string, ParameterValue>& params) override;
+
     // IStagePreviewCapability. Returns an is_valid() == false capability
     // until execute() has cached a frame representation.
     StagePreviewCapability get_preview_capability() const override;
@@ -77,8 +98,17 @@ public:
                                        const std::string& verb,
                                        const std::vector<uint8_t>& payload) override;
 
+    // IStageToolJobHandler: called on a job worker, on a stage object the
+    // host built for the job, with the node's inputs in `context`. It only
+    // computes; the view decides whether to write the result to the node.
+    StageToolReply run_tool_job(const std::string& contract_id,
+                                const std::string& verb,
+                                const std::vector<uint8_t>& payload,
+                                IToolJobContext& context) override;
+
 private:
     mutable std::shared_ptr<const VideoFrameRepresentation> cached_output_;
+    std::string note_;
 };
 
 } // namespace orc::plugins::skeleton

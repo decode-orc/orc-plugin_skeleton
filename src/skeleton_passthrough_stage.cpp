@@ -8,6 +8,9 @@
 
 #include "skeleton_passthrough_stage.h"
 
+#include <cstdint>
+#include <variant>
+
 namespace orc::plugins::skeleton {
 
 std::string SkeletonPassthroughStage::version() const
@@ -50,6 +53,41 @@ std::vector<ArtifactPtr> SkeletonPassthroughStage::execute(
     // default — is always safe, and the answer must come from metadata alone.
     cached_output_ = std::dynamic_pointer_cast<const VideoFrameRepresentation>(inputs.at(0));
     return {inputs.at(0)};
+}
+
+std::vector<ParameterDescriptor> SkeletonPassthroughStage::get_parameter_descriptors(
+    VideoSystem, SourceType) const
+{
+    ParameterDescriptor note;
+    note.name = kNoteParameter;
+    note.display_name = "Note";
+    note.description =
+        "Free text kept with the node. The stage does nothing with it; the "
+        "Skeleton Inspector can write its last measurement here.";
+    note.type = ParameterType::STRING;
+    note.constraints.default_value = std::string{};
+    return {note};
+}
+
+std::map<std::string, ParameterValue> SkeletonPassthroughStage::get_parameters() const
+{
+    return {{kNoteParameter, note_}};
+}
+
+bool SkeletonPassthroughStage::set_parameters(
+    const std::map<std::string, ParameterValue>& params)
+{
+    // Check everything before changing anything, so a refused call leaves
+    // the stage as it was.
+    std::string note = note_;
+    for (const auto& [name, value] : params) {
+        if (name != kNoteParameter || !std::holds_alternative<std::string>(value)) {
+            return false;
+        }
+        note = std::get<std::string>(value);
+    }
+    note_ = note;
+    return true;
 }
 
 size_t SkeletonPassthroughStage::required_input_count() const
@@ -120,7 +158,6 @@ std::vector<StageToolDescriptor> SkeletonPassthroughStage::get_stage_tools() con
     inspector.display_name = "Skeleton Inspector";
     inspector.description = "Shows what the passthrough last forwarded, in the plugin's own window";
     inspector.kind = StageToolKind::PluginView;
-    inspector.non_modal = true;
     inspector.contract_id = kInspectorContractId;
     return {inspector};
 }
@@ -145,6 +182,63 @@ StageToolReply SkeletonPassthroughStage::handle_tool_request(
                " frames (" + std::to_string(range.first) + " to " +
                std::to_string(range.last) + ").";
     }
+    if (!note_.empty()) {
+        text += "\nNote: " + note_;
+    }
+    reply.data.assign(text.begin(), text.end());
+    reply.ok = true;
+    return reply;
+}
+
+StageToolReply SkeletonPassthroughStage::run_tool_job(
+    const std::string& contract_id, const std::string& verb,
+    const std::vector<uint8_t>&, IToolJobContext& context)
+{
+    StageToolReply reply;
+    if (contract_id != kInspectorContractId || verb != kInspectorMeasureVerb) {
+        reply.error = "Unknown job '" + verb + "' for " + contract_id;
+        return reply;
+    }
+
+    // The inputs are what execute() would receive. This object is not the
+    // one previews use, so cached_output_ is not set here: read the input.
+    const auto& inputs = context.inputs();
+    const auto video = inputs.empty()
+                           ? nullptr
+                           : std::dynamic_pointer_cast<const VideoFrameRepresentation>(inputs[0]);
+    if (!video || video->frame_count() == 0) {
+        reply.error = "The node's input carries no frames to measure.";
+        return reply;
+    }
+
+    const FrameIDRange range = video->frame_range();
+    const uint64_t total = range.count();
+    uint64_t dropouts = 0;
+    uint64_t frames_with_dropouts = 0;
+    for (FrameID id = range.first; id <= range.last; ++id) {
+        // Check at least once per frame. Returning a refusal once cancelled
+        // is enough: the host replies "Cancelled" in its place.
+        if (context.is_cancelled()) {
+            reply.error = "Cancelled";
+            return reply;
+        }
+        const uint64_t done = id - range.first;
+        context.report_progress(static_cast<double>(done) / static_cast<double>(total),
+                                "Measuring frame " + std::to_string(done + 1) + " of " +
+                                    std::to_string(total));
+        if (video->has_frame(id)) {
+            const size_t runs = video->get_dropout_hints(id).size();
+            dropouts += runs;
+            frames_with_dropouts += runs > 0 ? 1 : 0;
+        }
+        if (id == range.last) {
+            break;  // FrameID is unsigned: never step past the last frame
+        }
+    }
+
+    const std::string text = std::to_string(dropouts) + " dropouts on " +
+                             std::to_string(frames_with_dropouts) + " of " +
+                             std::to_string(total) + " frames";
     reply.data.assign(text.begin(), text.end());
     reply.ok = true;
     return reply;

@@ -15,12 +15,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       ORC_SDK_DIR: ${{ github.workspace }}/decode-orc
-      # Host SDK the plugin is built against. Tracks `main` (host ABI 20).
+      # Host SDK the plugin is built against. Tracks `main` (host ABI 21).
       # Pin to a branch or tag only for a deliberate, temporary reason, and
       # restore `main` once it merges.
-      # Temporarily issue-377: the view SDK tier (orc/view/) is not on main
-      # yet. Restore `main` once decode-orc issue-377 merges.
-      ORC_SDK_REF: issue-377
+      # Temporarily issue-382: the view session's run_job() and
+      # apply_parameters(), which the Inspector uses, are not on main yet.
+      # Restore `main` once decode-orc issue-382 merges.
+      ORC_SDK_REF: issue-382
       ORC_CMAKE_ARGS: -DORC_INTREE_SDK_DIR=${{ github.workspace }}/decode-orc -DBUILD_TESTS=ON
     strategy:
       fail-fast: false
