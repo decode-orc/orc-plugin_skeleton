@@ -18,7 +18,7 @@ This repository is intended to be the canonical starter template for third-party
 - Release workflow that uploads platform plugin artifacts together with the
   mandatory `orc-plugin-manifest.yaml`
 
-## SDK Contract (Decode-Orc 2.x — host ABI 20 / plugin API 4)
+## SDK Contract (Decode-Orc 2.x — host ABI 21 / plugin API 4)
 
 - Include only the public SDK umbrella header in plugin/stage code:
 
@@ -192,9 +192,9 @@ ctest --test-dir build --output-on-failure
 Release assets and local packaging output follow
 `orc-plugin_<stage-name>_<platform>[_abi<N>].<ext>`:
 
-- `orc-plugin_skeleton_passthrough_linux_abi20.so`
-- `orc-plugin_skeleton_passthrough_macos_abi20.dylib`
-- `orc-plugin_skeleton_passthrough_windows_abi20.dll`
+- `orc-plugin_skeleton_passthrough_linux_abi21.so`
+- `orc-plugin_skeleton_passthrough_macos_abi21.dylib`
+- `orc-plugin_skeleton_passthrough_windows_abi21.dll`
 
 The `_abi<N>` token records the host ABI the binary targets, so one release can
 carry builds for several host ABIs side by side. The host validates downloads
@@ -215,9 +215,9 @@ manifest_schema: 1
 plugin_id: org.decodeorc.stage.skeleton_passthrough
 plugin_version: 1.0.10
 artifacts:
-  - file: orc-plugin_skeleton_passthrough_linux_abi20.so
+  - file: orc-plugin_skeleton_passthrough_linux_abi21.so
     platform: linux
-    abi: 20
+    abi: 21
     toolchain_tag: gcc15/libstdc++
     sha256: 5854e982866bf2d3c8211c9f34af3d5686a66036953aaf026bef33b0d5a80b7b
 ```
@@ -247,7 +247,7 @@ the digest used to verify (and quarantine) downloads and cache hits.
 	- on push/PR: builds/tests/packages on Linux and macOS via Nix (`nix develop`), plus native Windows build; uploads CI artifacts
 	- on tag push (`v*`): runs the exact same build/test/package matrix, merges the per-platform manifest fragments, then publishes the artifacts and `orc-plugin-manifest.yaml` to GitHub Release assets
 - `ORC_SDK_REF` in the workflow selects the decode-orc checkout the SDK comes
-	from. It tracks `main` (host ABI 20); pin it to a branch or tag only for a
+	from. It tracks `main` (host ABI 21); pin it to a branch or tag only for a
 	deliberate, temporary reason, and return it to `main` once that branch
 	merges.
 
