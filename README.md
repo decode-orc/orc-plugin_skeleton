@@ -275,8 +275,7 @@ the digest used to verify (and quarantine) downloads and cache hits.
 - `ORC_SDK_REF` in the workflow selects the decode-orc checkout the SDK comes
 	from. It tracks `main` (host ABI 21); pin it to a branch or tag only for a
 	deliberate, temporary reason, and return it to `main` once that branch
-	merges. It is pinned to `issue-382` for now: the job and parameter
-	write-back calls the Inspector uses are only there.
+	merges.
 
 ## Tagging a Release
 

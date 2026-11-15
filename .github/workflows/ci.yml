@@ -18,10 +18,7 @@ jobs:
       # Host SDK the plugin is built against. Tracks `main` (host ABI 21).
       # Pin to a branch or tag only for a deliberate, temporary reason, and
       # restore `main` once it merges.
-      # Temporarily issue-382: the view session's run_job() and
-      # apply_parameters(), which the Inspector uses, are not on main yet.
-      # Restore `main` once decode-orc issue-382 merges.
-      ORC_SDK_REF: issue-382
+      ORC_SDK_REF: main
       ORC_CMAKE_ARGS: -DORC_INTREE_SDK_DIR=${{ github.workspace }}/decode-orc -DBUILD_TESTS=ON
     strategy:
       fail-fast: false
