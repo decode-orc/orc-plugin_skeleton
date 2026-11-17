@@ -91,6 +91,10 @@ if(BUILD_VIEW)
             LIBRARY_OUTPUT_DIRECTORY "${_skeleton_plugin_dir}"
             RUNTIME_OUTPUT_DIRECTORY "${_skeleton_plugin_dir}")
     endif()
+    # Keeps any spdlog/fmt the view picks up from the SDK to itself, as
+    # orc_add_stage_plugin() does for the stage binary (decode-orc's
+    # plugin-sdk.md, "Private spdlog and fmt").
+    orc_sdk_hide_private_logging_symbols(${SKELETON_VIEW_TARGET})
 endif()
 
 # Build-info emitter for the release manifest (host ABI 12 and later).

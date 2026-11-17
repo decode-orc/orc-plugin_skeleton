@@ -29,6 +29,10 @@ jobs:
           # decode-orc's plugin-sdk.md). Linux therefore builds inside
           # org.kde.Sdk//6.9, the SDK decode-orc's Flatpak is built with
           # (GCC 14, Qt 6.9): a Nix build (GCC 15) would not load there.
+          # spdlog and fmt are compiled into the binaries header-only on every
+          # platform (decode-orc's plugin-sdk.md, "Private spdlog and fmt"),
+          # so no build links the build machine's copies; package_local.sh
+          # fails a binary that does (decode-orc issue #391).
           - os: ubuntu-latest
             platform: linux
             ext: so
